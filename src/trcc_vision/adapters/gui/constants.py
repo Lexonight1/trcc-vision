@@ -6,6 +6,10 @@ All coordinates are in pixels, matching the original WPF layout.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PySide6.QtGui import QFont
 
 # ── Asset directories ───────────────────────────────────────────────────
 
@@ -62,17 +66,34 @@ HW_PANEL_WIDTH = 687
 HW_CARD_WIDTH = 320
 HW_CARD_HEIGHT = 49
 
-# ── Theme page ──────────────────────────────────────────────────────────
+# ── Color palette (from decompiled XAML) ───────────────────────────────
 
-THEME_LIST_WIDTH = 500
-THEME_CARD_WIDTH = 140
-THEME_CARD_HEIGHT = 160
-THEME_PREVIEW_SIZE = 480
+COLOR_ACCENT = "#847148"
+COLOR_CYAN = "#02d0e8"
+COLOR_TEXT = "#ededed"
+COLOR_TEXT_DIM = "#dddddd"
+COLOR_INPUT_BG = "#222222"
+COLOR_HOVER_BG = "#363636"
+COLOR_DISABLED = "#717171"
 
-# ── Settings page ───────────────────────────────────────────────────────
+# ── Theme page (from pageyj.xaml) ──────────────────────────────────────
 
-SETTINGS_PANEL_WIDTH = 1165
-SETTINGS_PANEL_HEIGHT = 465
+THEME_PREVIEW_LEFT_WIDTH = 390
+THEME_PREVIEW_DISPLAY = 300   # 480x480 canvas scaled to 300x300 via Viewbox
+THEME_SENSOR_PANEL_WIDTH = 320
+THEME_CARD_WIDTH = 60         # XAML: Border Width=60
+THEME_CARD_HEIGHT = 60        # XAML: Border Height=60
+THEME_CARD_IMAGE = 30         # XAML: Image Width=30 Height=30
+
+# Sensor cards (from pageyj.xaml: Button Width=145 Height=140)
+SENSOR_CARD_WIDTH = 145
+SENSOR_CARD_HEIGHT = 140
+
+# ── Settings page (from pagesz.xaml) ───────────────────────────────────
+
+SETTINGS_LEFT_WIDTH = 980     # XAML: ColumnDefinition Width=980
+SETTINGS_RIGHT_WIDTH = 300    # XAML: ColumnDefinition Width=300
+SETTINGS_LABEL_WIDTH = 190    # XAML: DockPanel Width=190 (Label背景)
 
 # ── LCD preview ─────────────────────────────────────────────────────────
 
@@ -84,6 +105,38 @@ LCD_HEIGHT = 480
 EDITOR_CANVAS_SIZE = 480
 EDITOR_SELECTION_COLOR = "#847148"
 EDITOR_PROPERTY_PANEL_WIDTH = 350
+
+# ── Font resolution ─────────────────────────────────────────────────────
+
+
+def resolve_theme_font(
+    font_family: str,
+    font_file_name: str,
+    font_size_dips: float,
+    bold: bool = False,
+    italic: bool = False,
+) -> QFont:
+    """Build a QFont from WPF theme element font properties.
+
+    Loads custom TTF from FONT_ASSETS if available, converts WPF DIPs
+    (1/96") to Qt points (1/72"): pts = round(dips * 0.75).
+    """
+    from PySide6.QtGui import QFont, QFontDatabase
+
+    family = font_family
+    font_path = FONT_ASSETS / font_file_name
+    if font_path.exists():
+        font_id = QFontDatabase.addApplicationFont(str(font_path))
+        families = QFontDatabase.applicationFontFamilies(font_id)
+        if families:
+            family = families[0]
+
+    pt_size = round(font_size_dips * 0.75)
+    font = QFont(family, pt_size)
+    font.setBold(bold)
+    font.setItalic(italic)
+    return font
+
 
 # ── Sensor polling ──────────────────────────────────────────────────────
 

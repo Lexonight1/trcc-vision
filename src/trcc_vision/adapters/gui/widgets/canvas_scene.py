@@ -16,7 +16,6 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
-    QFontDatabase,
     QFontMetricsF,
     QPainter,
     QPen,
@@ -25,7 +24,12 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QGraphicsObject, QGraphicsScene
 
-from trcc_vision.adapters.gui.constants import FONT_ASSETS, LCD_HEIGHT, LCD_WIDTH, THEME_ASSETS
+from trcc_vision.adapters.gui.constants import (
+    LCD_HEIGHT,
+    LCD_WIDTH,
+    THEME_ASSETS,
+    resolve_theme_font,
+)
 from trcc_vision.core.enums import ElementType
 
 if TYPE_CHECKING:
@@ -162,21 +166,13 @@ class TextItem(CanvasItem):
 
     def _resolve_font(self) -> QFont:
         """Resolve the element's font, loading custom TTF if needed."""
-        family = self._element.font_family
-        font_file = self._element.font_file_name or "NI7SEG.TTF"
-        font_path = FONT_ASSETS / font_file
-        if font_path.exists():
-            font_id = QFontDatabase.addApplicationFont(str(font_path))
-            families = QFontDatabase.applicationFontFamilies(font_id)
-            if families:
-                family = families[0]
-
-        # WPF DIPs → Qt points: pts = DIPs * 0.75
-        pt_size = int(self._element.font_size * 0.75)
-        font = QFont(family, pt_size)
-        font.setBold(self._element.font_weight)
-        font.setItalic(self._element.font_style)
-        return font
+        return resolve_theme_font(
+            self._element.font_family,
+            self._element.font_file_name or "NI7SEG.TTF",
+            self._element.font_size,
+            self._element.font_weight,
+            self._element.font_style,
+        )
 
     def _default_text(self) -> str:
         """Return placeholder text when no live data is available."""

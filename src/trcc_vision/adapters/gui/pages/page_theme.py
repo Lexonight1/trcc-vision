@@ -1,7 +1,10 @@
 """Theme browser page — LCD preview + theme thumbnails + sensor cards.
 
-Matches C# PageYJ layout: LCD preview on left with Apply/Edit buttons,
-theme thumbnail grid in center, sensor readout cards on right.
+Layout from decompiled pageyj.xaml:
+  4 columns: * | 1000 | 320 | *
+  Left 390px: Apply button + 480x480 canvas scaled to 300x300
+  Center ~600px: "Theme Preview" title + two WrapPanels (standard + custom)
+  Right 320px: sensor cards in 2 columns (145x140 each) with bg images
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -19,7 +23,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from trcc_vision.adapters.gui.constants import GUI_ASSETS, THEME_ASSETS
+from trcc_vision.adapters.gui.constants import (
+    COLOR_ACCENT,
+    GUI_ASSETS,
+    SENSOR_CARD_HEIGHT,
+    SENSOR_CARD_WIDTH,
+    THEME_ASSETS,
+    THEME_PREVIEW_DISPLAY,
+    THEME_PREVIEW_LEFT_WIDTH,
+    THEME_SENSOR_PANEL_WIDTH,
+)
 from trcc_vision.adapters.gui.widgets.image_button import ImageButton
 from trcc_vision.adapters.gui.widgets.lcd_preview import LCDPreview
 from trcc_vision.adapters.gui.widgets.theme_card import ThemeCard
@@ -34,31 +47,34 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# Sensor card definitions: (SensorType, icon_file, label_key)
-_SENSOR_CARDS: list[tuple[int, str, str]] = [
-    (SensorType.CPU_TEMP, "icon_cpu_temp.png", "sensor.cpu_temp"),
-    (SensorType.CPU_LOAD, "icon_cpu_usage.png", "sensor.cpu_load"),
-    (SensorType.CPU_SPEED, "icon_cpu_freq.png", "sensor.cpu_speed"),
-    (SensorType.CPU_POWER, "icon_cpu_power.png", "sensor.cpu_power"),
-    (SensorType.CPU_VOLTAGE, "icon_cpu_voltage.png", "sensor.cpu_voltage"),
-    (SensorType.GPU_TEMP, "icon_cpu_temp.png", "sensor.gpu_temp"),
-    (SensorType.GPU_LOAD, "icon_cpu_usage.png", "sensor.gpu_load"),
-    (SensorType.RAM_USAGE_RATE, "icon_cpu_usage.png", "sensor.ram_usage"),
+# Sensor cards: (SensorType, bg_image, label_key)
+# Order and bg images match pageyj.xaml button definitions
+_SENSOR_CARDS_LEFT: list[tuple[int, str, str]] = [
+    (SensorType.CPU_TEMP, "card_cpu_usage.png", "sensor.cpu_temp"),
+    (SensorType.CPU_LOAD, "card_cpu_temp.png", "sensor.cpu_load"),
+    (SensorType.CPU_SPEED, "card_cpu_voltage.png", "sensor.cpu_speed"),
+    (SensorType.CPU_POWER, "card_generic.png", "sensor.cpu_power"),
+    (SensorType.CPU_VOLTAGE, "card_generic.png", "sensor.cpu_voltage"),
+    (SensorType.RAM_USED, "card_generic.png", "sensor.ram_used"),
+    (SensorType.RAM_AVAILABLE, "card_generic.png", "sensor.ram_available"),
+    (SensorType.RAM_USAGE_RATE, "card_generic.png", "sensor.ram_usage"),
+    (SensorType.HDD_TEMP, "card_generic.png", "sensor.hdd_temp"),
 ]
 
-_CARD_STYLE = """
-    QWidget#sensorCard {
-        background: rgba(40, 35, 25, 180);
-        border: 1px solid #847148;
-        border-radius: 8px;
-    }
-"""
-
-_CARD_SIZE = 120
+_SENSOR_CARDS_RIGHT: list[tuple[int, str, str]] = [
+    (SensorType.GPU_TEMP, "card_cpu_usage.png", "sensor.gpu_temp"),
+    (SensorType.GPU_LOAD, "card_cpu_temp.png", "sensor.gpu_load"),
+    (SensorType.GPU_SPEED, "card_cpu_voltage.png", "sensor.gpu_speed"),
+    (SensorType.GPU_POWER, "card_cpu_voltage.png", "sensor.gpu_power"),
+    (SensorType.HDD_CAPACITY, "card_generic.png", "sensor.hdd_capacity"),
+    (SensorType.HDD_USAGE, "card_generic.png", "sensor.hdd_usage"),
+    (SensorType.LAN_UPLOAD, "card_generic.png", "sensor.upload"),
+    (SensorType.LAN_DOWNLOAD, "card_generic.png", "sensor.download"),
+]
 
 
 class PageTheme(QWidget):
-    """Theme browser with 3-panel layout: preview | thumbnails | sensors."""
+    """Theme browser — matches pageyj.xaml 3-panel layout."""
 
     edit_requested = Signal(object, object)  # (ThemeInfo, ThemeConfig)
 
@@ -78,206 +94,211 @@ class PageTheme(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        # Left: LCD preview + buttons
-        self._setup_preview(layout)
-
-        # Center: theme thumbnail grid
+        self._setup_preview_panel(layout)
         self._setup_theme_list(layout)
-
-        # Right: sensor readout cards
         self._setup_sensor_panel(layout)
 
-        # Subscribe to sensor updates
         ctx.event_bus.subscribe(SensorUpdated, self._on_sensor_updated)
+        log.info("PageTheme created (XAML-matched layout)")
 
-        log.info("PageTheme created (3-panel layout)")
+    # ── Left Panel: LCD Preview + Apply ───────────────────────────────
 
-    # ── Left Panel: LCD Preview ───────────────────────────────────────
-
-    def _setup_preview(self, parent: QHBoxLayout) -> None:
-        """Left panel — LCD preview + Apply/Edit buttons."""
+    def _setup_preview_panel(self, parent: QHBoxLayout) -> None:
         left = QWidget()
+        left.setFixedWidth(THEME_PREVIEW_LEFT_WIDTH)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(10, 0, 0, 0)
+        left_layout.setSpacing(10)
 
-        title = QLabel(t("gui.theme.theme_preview"))
-        title.setStyleSheet(
-            "color: #ededed; font-size: 14px; font-weight: bold; background: transparent;"
-        )
-        left_layout.addWidget(title)
-
-        # LCD preview with background frame
-        preview_frame = QWidget()
-        preview_frame.setFixedSize(500, 560)
-        preview_frame.setStyleSheet("background: transparent;")
-
-        # Frame background image
-        from PySide6.QtGui import QPixmap
-
-        frame_bg = QPixmap(str(GUI_ASSETS / "bg_theme_preview.png"))
-        if not frame_bg.isNull():
-            frame_label = QLabel(preview_frame)
-            scaled = frame_bg.scaled(
-                500, 560,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            frame_label.setPixmap(scaled)
-            frame_label.setGeometry(0, 0, 500, 560)
-            frame_label.lower()
-
-        # LCD preview centered in frame
-        self._preview = LCDPreview(preview_frame)
-        self._preview.move(10, 10)
-
-        left_layout.addWidget(preview_frame, 0, Qt.AlignmentFlag.AlignCenter)
-
-        # Action buttons
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
-
+        # Apply button (XAML: 应用按键.png, 220x55)
         apply_btn = ImageButton(
-            GUI_ASSETS / "btn_apply.png", tooltip=t("gui.btn.apply"),
+            GUI_ASSETS / "btn_apply_gold.png", tooltip=t("gui.btn.apply"),
         )
         apply_btn.clicked.connect(self._on_apply)
-        btn_row.addWidget(apply_btn)
+        left_layout.addWidget(apply_btn, 0, Qt.AlignmentFlag.AlignCenter)
 
+        # LCD preview: 480x480 rendered, displayed at 300x300 (XAML Viewbox)
+        preview_container = QWidget()
+        preview_container.setFixedSize(
+            THEME_PREVIEW_DISPLAY + 4, THEME_PREVIEW_DISPLAY + 4,
+        )
+        preview_container.setStyleSheet(
+            f"border: 1px solid {COLOR_ACCENT}; border-radius: 5px; background: black;"
+        )
+
+        self._preview = LCDPreview(preview_container)
+        # Scale the 480x480 widget to fit 300x300 display
+        # LCDPreview renders at 480x480 internally but we display at 300x300
+        self._preview.setFixedSize(THEME_PREVIEW_DISPLAY, THEME_PREVIEW_DISPLAY)
+
+        left_layout.addWidget(preview_container, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Edit button
         edit_btn = ImageButton(
-            GUI_ASSETS / "btn_ok.png", tooltip=t("gui.btn.edit"),
+            GUI_ASSETS / "btn_apply.png", tooltip=t("gui.btn.edit"),
         )
         edit_btn.clicked.connect(self._on_edit)
-        btn_row.addWidget(edit_btn)
+        left_layout.addWidget(edit_btn, 0, Qt.AlignmentFlag.AlignCenter)
 
-        btn_row.addStretch()
-        left_layout.addLayout(btn_row)
         left_layout.addStretch()
-
         parent.addWidget(left)
 
     # ── Center Panel: Theme Thumbnails ────────────────────────────────
 
     def _setup_theme_list(self, parent: QHBoxLayout) -> None:
-        """Center panel — scrollable theme thumbnail grid."""
         center = QWidget()
         center_layout = QVBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(5)
 
-        title = QLabel(t("gui.theme.theme_list"))
+        title = QLabel(t("gui.theme.theme_preview"))
         title.setStyleSheet(
-            "color: #ededed; font-size: 14px; font-weight: bold; background: transparent;"
+            "color: white; font-size: 15px; font-weight: bold; background: transparent;"
         )
         center_layout.addWidget(title)
 
+        # Standard presets (XAML: wp_DefaultTheme WrapPanel)
+        standard_scroll = self._make_theme_scroll()
+        standard_container = QWidget()
+        standard_container.setStyleSheet("background: transparent;")
+        self._standard_grid = QGridLayout(standard_container)
+        self._standard_grid.setSpacing(5)
+        self._standard_grid.setContentsMargins(5, 5, 5, 5)
+
+        self._load_default_themes()
+
+        standard_scroll.setWidget(standard_container)
+        center_layout.addWidget(standard_scroll, 1)
+
+        # Custom themes (XAML: wp_CustomerTheme WrapPanel)
+        custom_scroll = self._make_theme_scroll()
+        custom_container = QWidget()
+        custom_container.setStyleSheet("background: transparent;")
+        self._custom_grid = QGridLayout(custom_container)
+        self._custom_grid.setSpacing(5)
+        self._custom_grid.setContentsMargins(5, 5, 5, 5)
+        # TODO: load user themes here
+        custom_scroll.setWidget(custom_container)
+        center_layout.addWidget(custom_scroll, 1)
+
+        parent.addWidget(center, 1)
+
+    def _make_theme_scroll(self) -> QScrollArea:
+        """Create a scroll area matching XAML: white border, CornerRadius=7."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-            "QScrollBar:vertical { background: #222222; width: 8px; }"
-            "QScrollBar::handle:vertical { background: #847148; border-radius: 4px; }"
+            "QScrollArea { background: transparent; "
+            "border: 1px solid white; border-radius: 7px; }"
+            f"QScrollBar:vertical {{ background: {COLOR_ACCENT}22; width: 6px; }}"
+            f"QScrollBar::handle:vertical {{ background: {COLOR_ACCENT}; border-radius: 3px; }}"
         )
-
-        card_container = QWidget()
-        card_container.setStyleSheet("background: transparent;")
-        self._card_grid = QGridLayout(card_container)
-        self._card_grid.setSpacing(8)
-        self._card_grid.setContentsMargins(5, 5, 5, 5)
-
-        self._load_default_themes()
-
-        scroll.setWidget(card_container)
-        center_layout.addWidget(scroll, 1)
-
-        parent.addWidget(center, 1)
+        return scroll
 
     # ── Right Panel: Sensor Cards ─────────────────────────────────────
 
     def _setup_sensor_panel(self, parent: QHBoxLayout) -> None:
-        """Right panel — sensor readout cards in a grid."""
         right = QWidget()
-        right.setFixedWidth(280)
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 10, 0)
-        right_layout.setSpacing(8)
+        right.setFixedWidth(THEME_SENSOR_PANEL_WIDTH)
 
-        scroll = QScrollArea()
+        # Background image (XAML: 硬件参数外框.png)
+        bg = QPixmap(str(GUI_ASSETS / "bg_sensor_panel.png"))
+        if not bg.isNull():
+            bg_label = QLabel(right)
+            scaled = bg.scaled(
+                THEME_SENSOR_PANEL_WIDTH, 600,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            bg_label.setPixmap(scaled)
+            bg_label.setGeometry(0, 0, THEME_SENSOR_PANEL_WIDTH, 600)
+
+        scroll = QScrollArea(right)
+        scroll.setGeometry(5, 5, THEME_SENSOR_PANEL_WIDTH - 10, 590)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
             "QScrollArea { background: transparent; border: none; }"
-            "QScrollBar:vertical { background: #222222; width: 6px; }"
-            "QScrollBar::handle:vertical { background: #847148; border-radius: 3px; }"
+            "QScrollBar:vertical { background: transparent; width: 0px; }"
         )
 
         card_container = QWidget()
         card_container.setStyleSheet("background: transparent;")
-        grid = QGridLayout(card_container)
-        grid.setSpacing(6)
-        grid.setContentsMargins(0, 0, 0, 0)
+        grid = QHBoxLayout(card_container)
+        grid.setContentsMargins(0, 5, 0, 5)
+        grid.setSpacing(0)
 
-        cols = 2
-        for idx, (sensor_type, icon_file, label_key) in enumerate(_SENSOR_CARDS):
-            card = self._make_sensor_card(sensor_type, icon_file, label_key)
-            grid.addWidget(card, idx // cols, idx % cols)
+        # Left column of sensor cards (XAML: Grid Column=0)
+        left_col = QVBoxLayout()
+        left_col.setSpacing(10)
+        for sensor_type, bg_file, label_key in _SENSOR_CARDS_LEFT:
+            left_col.addWidget(self._make_sensor_card(sensor_type, bg_file, label_key))
+        left_col.addStretch()
+        grid.addLayout(left_col)
+
+        # Right column of sensor cards (XAML: Grid Column=1)
+        right_col = QVBoxLayout()
+        right_col.setSpacing(10)
+        for sensor_type, bg_file, label_key in _SENSOR_CARDS_RIGHT:
+            right_col.addWidget(self._make_sensor_card(sensor_type, bg_file, label_key))
+        right_col.addStretch()
+        grid.addLayout(right_col)
 
         scroll.setWidget(card_container)
-        right_layout.addWidget(scroll, 1)
-
         parent.addWidget(right)
 
-    def _make_sensor_card(self, sensor_type: int, icon_file: str, label_key: str) -> QWidget:
-        """Create a single sensor readout card with icon."""
-        from PySide6.QtGui import QPixmap
-
+    def _make_sensor_card(self, sensor_type: int, bg_file: str, label_key: str) -> QWidget:
+        """Sensor card: 145x140 with background image, value + label overlay."""
         card = QWidget()
-        card.setObjectName("sensorCard")
-        card.setFixedSize(_CARD_SIZE, _CARD_SIZE)
-        card.setStyleSheet(_CARD_STYLE)
+        card.setFixedSize(SENSOR_CARD_WIDTH, SENSOR_CARD_HEIGHT)
 
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(2)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Icon
-        icon_path = GUI_ASSETS / icon_file
-        icon_pixmap = QPixmap(str(icon_path))
-        if not icon_pixmap.isNull():
-            icon_label = QLabel()
-            icon_label.setPixmap(icon_pixmap.scaled(
-                32, 32,
-                Qt.AspectRatioMode.KeepAspectRatio,
+        # Background image (XAML: Background=ImageBrush)
+        bg_path = GUI_ASSETS / bg_file
+        bg_pixmap = QPixmap(str(bg_path))
+        if not bg_pixmap.isNull():
+            bg_label = QLabel(card)
+            bg_label.setPixmap(bg_pixmap.scaled(
+                SENSOR_CARD_WIDTH, SENSOR_CARD_HEIGHT,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             ))
-            icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            icon_label.setStyleSheet("background: transparent;")
-            layout.addWidget(icon_label)
+            bg_label.setGeometry(0, 0, SENSOR_CARD_WIDTH, SENSOR_CARD_HEIGHT)
 
-        # Value (large, prominent)
+        # Content overlay
+        content = QWidget(card)
+        content.setGeometry(0, 0, SENSOR_CARD_WIDTH, SENSOR_CARD_HEIGHT)
+        content.setStyleSheet("background: transparent;")
+
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(22, 30, 22, 10)
+        layout.setSpacing(0)
+
+        # Value (XAML: FontSize=15, Bold, White)
         value_label = QLabel("—")
         value_label.setStyleSheet(
-            "color: #ededed; font-size: 16px; font-weight: bold; background: transparent;"
+            "color: #ffffff; font-size: 15px; font-weight: bold; background: transparent;"
         )
         value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(value_label)
 
-        # Sensor name
+        # Sensor name (XAML: white, wrapping, centered)
         name_label = QLabel(t(label_key))
         name_label.setStyleSheet(
-            "color: #847148; font-size: 9px; background: transparent;"
+            "color: #ffffff; font-size: 10px; background: transparent;"
         )
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setWordWrap(True)
         layout.addWidget(name_label)
 
+        layout.addStretch()
         self._sensor_labels[sensor_type] = value_label
         return card
 
     # ── Theme Loading ─────────────────────────────────────────────────
 
     def _load_default_themes(self) -> None:
-        """Load the 10 bundled default themes as cards."""
-        cols = 3
+        cols = 8  # XAML WrapPanel width=540 / ~70px per card ≈ 8 columns
 
         for i in range(1, 11):
             xml_path = THEME_ASSETS / f"Theme{i}.xml"
@@ -296,14 +317,13 @@ class PageTheme(QWidget):
 
             row = (i - 1) // cols
             col = (i - 1) % cols
-            self._card_grid.addWidget(card, row, col)
+            self._standard_grid.addWidget(card, row, col)
 
         log.info("Loaded %d default theme cards", len(self._cards))
 
     # ── Event Handlers ────────────────────────────────────────────────
 
     def _on_theme_selected(self, name: str) -> None:
-        """Handle theme card click."""
         log.info("Theme selected: %s", name)
         self._selected_theme = name
 
@@ -329,15 +349,13 @@ class PageTheme(QWidget):
                 break
 
     def _on_edit(self) -> None:
-        """Open the theme editor for the selected theme."""
         if not self._selected_theme_info or not self._selected_config:
             log.warning("No theme selected to edit")
             return
-        log.info("Edit requested for: %s", self._selected_theme_info.name)
+        log.info("Edit requested: %s", self._selected_theme_info.name)
         self.edit_requested.emit(self._selected_theme_info, self._selected_config)
 
     def _on_apply(self) -> None:
-        """Apply selected theme to device."""
         if not self._selected_theme:
             log.warning("No theme selected to apply")
             return
@@ -345,9 +363,7 @@ class PageTheme(QWidget):
         # TODO: send theme to device via use case
 
     def _on_sensor_updated(self, event: SensorUpdated) -> None:
-        """Update LCD preview and sensor cards with live data."""
         self._preview.update_sensors(event.readings)
-
         for reading in event.readings:
             label = self._sensor_labels.get(reading.sensor_type)
             if label:

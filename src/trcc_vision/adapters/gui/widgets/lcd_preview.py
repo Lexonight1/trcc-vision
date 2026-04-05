@@ -11,10 +11,15 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QLabel, QWidget
 
-from trcc_vision.adapters.gui.constants import FONT_ASSETS, LCD_HEIGHT, LCD_WIDTH, THEME_ASSETS
+from trcc_vision.adapters.gui.constants import (
+    LCD_HEIGHT,
+    LCD_WIDTH,
+    THEME_ASSETS,
+    resolve_theme_font,
+)
 from trcc_vision.core.enums import ElementType
 
 if TYPE_CHECKING:
@@ -127,21 +132,10 @@ class LCDPreview(QWidget):
 
     def _draw_text(self, painter: QPainter, text: str, elem: ThemeElement) -> None:
         """Draw text at the element's position with its font/color settings."""
-        # Font
-        font_path = FONT_ASSETS / (elem.font_file_name or "NI7SEG.TTF")
-        if font_path.exists():
-            from PySide6.QtGui import QFontDatabase
-            font_id = QFontDatabase.addApplicationFont(str(font_path))
-            families = QFontDatabase.applicationFontFamilies(font_id)
-            family = families[0] if families else elem.font_family
-        else:
-            family = elem.font_family
-
-        # WPF FontSize is in DIPs (1/96"), Qt uses points (1/72"): pts = DIPs * 0.75
-        pt_size = int(elem.font_size * 0.75)
-        font = QFont(family, pt_size)
-        font.setBold(elem.font_weight)
-        font.setItalic(elem.font_style)
+        font = resolve_theme_font(
+            elem.font_family, elem.font_file_name or "NI7SEG.TTF",
+            elem.font_size, elem.font_weight, elem.font_style,
+        )
         painter.setFont(font)
 
         # Color

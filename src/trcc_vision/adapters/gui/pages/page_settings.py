@@ -1,7 +1,8 @@
-"""Settings page — language, brightness, temperature unit, about.
+"""Settings page — 2-column layout matching decompiled pagesz.xaml.
 
-Matches C# PageSZ: toggle switches, radio buttons, slider, version info.
-All settings saved via config persistence (when available) or in-memory.
+Left column (980px): startup toggles, temp/language, brightness — all inside
+bg_settings_frame.png with bg_label_setting.png label backgrounds.
+Right column (300px): software + terminal version with check-update buttons.
 """
 
 from __future__ import annotations
@@ -14,17 +15,25 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QRadioButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
 
-from trcc_vision.adapters.gui.constants import GUI_ASSETS
+from trcc_vision.adapters.gui.constants import (
+    COLOR_ACCENT,
+    COLOR_CYAN,
+    COLOR_TEXT,
+    COLOR_TEXT_DIM,
+    GUI_ASSETS,
+    SETTINGS_LABEL_WIDTH,
+    SETTINGS_LEFT_WIDTH,
+    SETTINGS_RIGHT_WIDTH,
+)
+from trcc_vision.adapters.gui.widgets.image_button import ImageButton
 from trcc_vision.infrastructure.i18n import setup_i18n, t
 
 if TYPE_CHECKING:
@@ -33,86 +42,144 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _label_with_bg(text: str) -> QWidget:
+    """Create a 190px label with bg_label_setting.png background (XAML: Label背景)."""
+    container = QWidget()
+    container.setFixedSize(SETTINGS_LABEL_WIDTH, 40)
+
+    bg = QPixmap(str(GUI_ASSETS / "bg_label_setting.png"))
+    if not bg.isNull():
+        bg_label = QLabel(container)
+        bg_label.setPixmap(bg.scaled(
+            SETTINGS_LABEL_WIDTH, 40,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        ))
+        bg_label.setGeometry(0, 0, SETTINGS_LABEL_WIDTH, 40)
+
+    text_label = QLabel(text, container)
+    text_label.setGeometry(0, 0, SETTINGS_LABEL_WIDTH, 40)
+    text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    text_label.setStyleSheet(
+        f"color: {COLOR_TEXT}; font-size: 15px; background: transparent;"
+    )
+    text_label.setWordWrap(True)
+    return container
+
+
 class PageSettings(QWidget):
-    """Settings and about page."""
+    """Settings and about page — 2-column layout from pagesz.xaml."""
 
     def __init__(self, ctx: AppContext) -> None:
         super().__init__()
         self._ctx = ctx
         self.setStyleSheet("background: transparent;")
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 10, 20, 10)
-        layout.setSpacing(15)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(20)
 
-        # Settings background
-        bg = QPixmap(str(GUI_ASSETS / "bg_settings.png"))
-        if not bg.isNull():
-            bg_label = QLabel(self)
-            scaled = bg.scaled(
-                1160, 460,
+        self._setup_left_column(layout)
+        self._setup_right_column(layout)
+
+        self._load_saved_prefs()
+        log.info("PageSettings created (XAML-matched 2-column layout)")
+
+    # ── Left Column (980px) ───────────────────────────────────────────
+
+    def _setup_left_column(self, parent: QHBoxLayout) -> None:
+        left = QWidget()
+        left.setFixedWidth(SETTINGS_LEFT_WIDTH)
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Title + divider
+        title = QLabel(t("gui.nav.settings_about"))
+        title.setStyleSheet(
+            "color: white; font-size: 20px; font-weight: bold; background: transparent;"
+        )
+        left_layout.addWidget(title)
+
+        # Settings frame with background image (XAML: 设置边框.png)
+        frame = QWidget()
+        frame_bg = QPixmap(str(GUI_ASSETS / "bg_settings_frame.png"))
+        if not frame_bg.isNull():
+            bg_label = QLabel(frame)
+            bg_label.setPixmap(frame_bg.scaled(
+                SETTINGS_LEFT_WIDTH - 50, 420,
                 Qt.AspectRatioMode.IgnoreAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
-            )
-            bg_label.setPixmap(scaled)
-            bg_label.setGeometry(0, 0, 1160, 460)
+            ))
+            bg_label.setGeometry(0, 0, SETTINGS_LEFT_WIDTH - 50, 420)
             bg_label.lower()
 
-        self._setup_startup(layout)
-        self._setup_language(layout)
-        self._setup_temperature(layout)
-        self._setup_brightness(layout)
-        self._setup_about(layout)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(30, 30, 30, 30)
+        frame_layout.setSpacing(0)
 
-        layout.addStretch()
-
-        # Load saved preferences from config
-        self._load_saved_prefs()
-
-        log.info("PageSettings created")
-
-    def _setup_startup(self, parent: QVBoxLayout) -> None:
-        """Start on boot / minimize to tray toggles."""
-        group = self._make_group(t("gui.settings.startup_mode"))
-
-        # Start on boot
+        # Row 1: Start Up + Minimize (XAML: height 60, margin 30)
         row1 = QHBoxLayout()
-        self._start_on_boot = QCheckBox(t("gui.settings.start_on_boot"))
-        self._start_on_boot.setStyleSheet(
-            "QCheckBox { color: #ededed; background: transparent; font-size: 13px; }"
-            "QCheckBox::indicator { width: 18px; height: 18px; }"
-            "QCheckBox::indicator:checked { background: #847148; border: 1px solid #847148; }"
-            "QCheckBox::indicator:unchecked { background: #222222; border: 1px solid #555; }"
-        )
+        row1.setSpacing(30)
+        self._setup_startup_row(row1)
+        frame_layout.addLayout(row1)
+        frame_layout.addSpacing(30)
+
+        # Row 2: Temperature + Language (XAML: height 60, margin 30)
+        row2 = QHBoxLayout()
+        row2.setSpacing(30)
+        self._setup_temp_lang_row(row2)
+        frame_layout.addLayout(row2)
+        frame_layout.addSpacing(30)
+
+        # Row 3: Brightness (XAML: height 60, margin 30)
+        row3 = QHBoxLayout()
+        self._setup_brightness_row(row3)
+        frame_layout.addLayout(row3)
+        frame_layout.addStretch()
+
+        left_layout.addWidget(frame, 1)
+        parent.addWidget(left)
+
+    def _setup_startup_row(self, row: QHBoxLayout) -> None:
+        """Start on boot + Minimize on startup — side by side."""
+        # Start on boot
+        row.addWidget(_label_with_bg(t("gui.settings.start_on_boot")))
+        self._start_on_boot = QCheckBox(t("gui.btn.on"))
+        self._start_on_boot.setStyleSheet(self._toggle_style())
         self._start_on_boot.stateChanged.connect(self._on_startup_changed)
-        row1.addWidget(self._start_on_boot)
-        row1.addStretch()
+        row.addWidget(self._start_on_boot)
+        row.addStretch()
 
         # Minimize to tray
-        self._minimize_to_tray = QCheckBox(t("gui.settings.minimize_to_tray"))
-        self._minimize_to_tray.setStyleSheet(self._start_on_boot.styleSheet())
+        row.addWidget(_label_with_bg(t("gui.settings.minimize_to_tray")))
+        self._minimize_to_tray = QCheckBox(t("gui.btn.on"))
+        self._minimize_to_tray.setStyleSheet(self._toggle_style())
         self._minimize_to_tray.stateChanged.connect(self._on_startup_changed)
-        row1.addWidget(self._minimize_to_tray)
-        row1.addStretch()
+        row.addWidget(self._minimize_to_tray)
+        row.addStretch()
 
-        group.layout().addLayout(row1)  # type: ignore[union-attr]
-        parent.addWidget(group)
+    def _setup_temp_lang_row(self, row: QHBoxLayout) -> None:
+        """Temperature display + Language selector — side by side."""
+        # Temperature
+        row.addWidget(_label_with_bg(t("gui.settings.temp_display")))
+        self._radio_celsius = QRadioButton(t("gui.settings.celsius"))
+        self._radio_celsius.setStyleSheet(self._radio_style())
+        self._radio_celsius.setChecked(True)
+        row.addWidget(self._radio_celsius)
+        self._radio_fahrenheit = QRadioButton(t("gui.settings.fahrenheit"))
+        self._radio_fahrenheit.setStyleSheet(self._radio_style())
+        row.addWidget(self._radio_fahrenheit)
+        row.addStretch()
 
-    def _setup_language(self, parent: QVBoxLayout) -> None:
-        """Language selector."""
-        group = self._make_group(t("settings.language"))
-
-        row = QHBoxLayout()
-        label = QLabel(t("settings.language"))
-        label.setStyleSheet("color: #cccccc; font-size: 13px; background: transparent;")
-        row.addWidget(label)
-
+        # Language
+        row.addWidget(_label_with_bg(t("settings.language")))
         self._lang_combo = QComboBox()
+        self._lang_combo.setFixedWidth(130)
         self._lang_combo.setStyleSheet(
-            "QComboBox { background: #2a2a3e; color: white; border: 1px solid #555; "
-            "padding: 4px; min-width: 150px; }"
+            f"QComboBox {{ background: {COLOR_ACCENT}; color: #222222; "
+            "border: none; padding: 4px; font-size: 15px; }}"
             "QComboBox::drop-down { border: none; }"
-            "QComboBox QAbstractItemView { background: #2a2a3e; color: white; }"
+            f"QComboBox QAbstractItemView {{ background: {COLOR_ACCENT}; color: #222222; }}"
         )
 
         from trcc_vision.infrastructure.i18n import _instance
@@ -123,7 +190,6 @@ class PageSettings(QWidget):
                 display = t(lang_key) if t(lang_key) != lang_key else lang_code
                 self._lang_combo.addItem(display, lang_code)
 
-            # Select current
             current = _instance.current_language()
             for i in range(self._lang_combo.count()):
                 if self._lang_combo.itemData(i) == current:
@@ -134,144 +200,155 @@ class PageSettings(QWidget):
         row.addWidget(self._lang_combo)
         row.addStretch()
 
-        group.layout().addLayout(row)  # type: ignore[union-attr]
-        parent.addWidget(group)
+    def _setup_brightness_row(self, row: QHBoxLayout) -> None:
+        """Brightness slider — XAML: SliderStyle, width 400, value text font 20."""
+        row.addWidget(_label_with_bg(t("gui.settings.brightness")))
 
-    def _setup_temperature(self, parent: QVBoxLayout) -> None:
-        """Temperature unit selector."""
-        group = self._make_group(t("gui.settings.temp_display"))
-
-        row = QHBoxLayout()
-        self._radio_celsius = QRadioButton(t("gui.settings.celsius"))
-        self._radio_celsius.setStyleSheet("color: #cccccc; background: transparent;")
-        self._radio_celsius.setChecked(True)
-        row.addWidget(self._radio_celsius)
-
-        self._radio_fahrenheit = QRadioButton(t("gui.settings.fahrenheit"))
-        self._radio_fahrenheit.setStyleSheet("color: #cccccc; background: transparent;")
-        row.addWidget(self._radio_fahrenheit)
-
-        row.addStretch()
-        group.layout().addLayout(row)  # type: ignore[union-attr]
-        parent.addWidget(group)
-
-    def _setup_brightness(self, parent: QVBoxLayout) -> None:
-        """Brightness slider (0-100)."""
-        group = self._make_group(t("gui.settings.brightness"))
-
-        row = QHBoxLayout()
         self._brightness_slider = QSlider(Qt.Orientation.Horizontal)
         self._brightness_slider.setRange(0, 100)
         self._brightness_slider.setValue(100)
+        self._brightness_slider.setFixedWidth(400)
         self._brightness_slider.setStyleSheet(
-            "QSlider::groove:horizontal { background: #333355; height: 6px; border-radius: 3px; }"
-            "QSlider::handle:horizontal { background: #847148; width: 16px; "
-            "margin: -5px 0; border-radius: 8px; }"
+            "QSlider::groove:horizontal { background: #b6b6b6; height: 4px; }"
+            f"QSlider::sub-page:horizontal {{ background: {COLOR_ACCENT}; height: 4px; }}"
+            "QSlider::handle:horizontal { background: white; width: 20px; height: 20px; "
+            "margin: -8px 0; border-radius: 10px; }"
         )
-        self._brightness_slider.setMinimumWidth(300)
+        self._brightness_slider.valueChanged.connect(self._on_brightness_changed)
         row.addWidget(self._brightness_slider)
 
-        self._brightness_label = QLabel("100%")
+        self._brightness_label = QLabel("100")
         self._brightness_label.setStyleSheet(
-            "color: white; font-size: 14px; background: transparent;"
+            f"color: {COLOR_TEXT_DIM}; font-size: 20px; background: transparent;"
         )
-        self._brightness_label.setMinimumWidth(50)
+        self._brightness_label.setFixedWidth(50)
         row.addWidget(self._brightness_label)
-
-        self._brightness_slider.valueChanged.connect(self._on_brightness_changed)
-
         row.addStretch()
-        group.layout().addLayout(row)  # type: ignore[union-attr]
-        parent.addWidget(group)
 
-    def _setup_about(self, parent: QVBoxLayout) -> None:
-        """Version info + check update section."""
-        group = self._make_group(t("settings.about"))
-        glayout = group.layout()
-        assert glayout is not None
+    # ── Right Column (300px) ──────────────────────────────────────────
+
+    def _setup_right_column(self, parent: QHBoxLayout) -> None:
+        right = QWidget()
+        right.setFixedWidth(SETTINGS_RIGHT_WIDTH)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+
+        # Header
+        header = QLabel(t("gui.settings.software_version"))
+        header.setStyleSheet(
+            f"color: {COLOR_TEXT}; font-size: 16px; font-weight: bold; "
+            "background: transparent;"
+        )
+        right_layout.addWidget(header)
 
         info = self._ctx.get_system_info.execute()
 
-        # Software version row
-        sw_row = QHBoxLayout()
-        sw_label = QLabel(t("gui.settings.software_version"))
-        sw_label.setStyleSheet("color: #ededed; font-size: 13px; background: transparent;")
-        sw_row.addWidget(sw_label)
-        sw_val = QLabel(info.app_version)
-        sw_val.setStyleSheet("color: #847148; font-size: 13px; font-weight: bold; "
-                             "background: transparent;")
-        sw_row.addWidget(sw_val)
-        sw_row.addStretch()
-        glayout.addLayout(sw_row)
+        # Software version section
+        right_layout.addWidget(self._make_version_block(
+            t("gui.settings.software_version"), info.app_version,
+        ))
 
-        # Terminal version row
-        tv_row = QHBoxLayout()
-        tv_label = QLabel(t("gui.settings.terminal_version"))
-        tv_label.setStyleSheet("color: #ededed; font-size: 13px; background: transparent;")
-        tv_row.addWidget(tv_label)
-        tv_val = QLabel("—")  # populated when device connects
-        tv_val.setStyleSheet("color: #847148; font-size: 13px; font-weight: bold; "
-                             "background: transparent;")
-        tv_row.addWidget(tv_val)
-        tv_row.addStretch()
+        # Terminal version section
+        right_layout.addWidget(self._make_version_block(
+            t("gui.settings.terminal_version"), "—",
+            show_update_btn=True,
+        ))
 
-        update_btn = QPushButton(t("gui.settings.check_update"))
-        update_btn.setStyleSheet(
-            "QPushButton { background: #847148; color: white; border: none; "
-            "border-radius: 4px; padding: 6px 16px; font-size: 12px; }"
-            "QPushButton:hover { background: #A1864B; }"
+        right_layout.addStretch()
+        parent.addWidget(right)
+
+    def _make_version_block(
+        self, title: str, version: str, *, show_update_btn: bool = False,
+    ) -> QWidget:
+        """Version display block: bg_label_setting title + version number + optional button."""
+        block = QWidget()
+        block_layout = QVBoxLayout(block)
+        block_layout.setContentsMargins(0, 0, 0, 0)
+        block_layout.setSpacing(5)
+
+        # Title with label background (XAML: 255px wide Label背景)
+        title_container = QWidget()
+        title_container.setFixedSize(255, 50)
+        bg = QPixmap(str(GUI_ASSETS / "bg_label_setting.png"))
+        if not bg.isNull():
+            bg_label = QLabel(title_container)
+            bg_label.setPixmap(bg.scaled(
+                255, 50,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+            bg_label.setGeometry(0, 0, 255, 50)
+        title_label = QLabel(title, title_container)
+        title_label.setGeometry(0, 0, 255, 50)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet(
+            f"color: {COLOR_TEXT}; font-size: 16px; background: transparent;"
         )
-        update_btn.clicked.connect(lambda: log.info("Check update clicked (not implemented)"))
-        tv_row.addWidget(update_btn)
-        glayout.addLayout(tv_row)
+        title_label.setWordWrap(True)
+        block_layout.addWidget(title_container, 0, Qt.AlignmentFlag.AlignCenter)
 
-        # Platform info
-        platform_text = (
-            f"Python {info.python_version.split()[0]}  |  "
-            f"{info.platform_name}  |  {info.os_version}"
+        # Version number (XAML: FontSize=20, Bold)
+        ver_label = QLabel(version)
+        ver_label.setStyleSheet(
+            f"color: {COLOR_TEXT}; font-size: 20px; font-weight: bold; "
+            "background: transparent;"
         )
-        platform_label = QLabel(platform_text)
-        platform_label.setStyleSheet("color: #777777; font-size: 11px; background: transparent;")
-        platform_label.setWordWrap(True)
-        glayout.addWidget(platform_label)
+        ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        block_layout.addWidget(ver_label)
 
-        parent.addWidget(group)
+        # Check update button (XAML: 应用按键.png, 255x70)
+        if show_update_btn:
+            btn = ImageButton(
+                GUI_ASSETS / "btn_apply_gold.png", tooltip=t("gui.settings.check_update"),
+            )
+            btn.clicked.connect(
+                lambda: log.info("Check update clicked (not implemented)")
+            )
+            block_layout.addWidget(btn, 0, Qt.AlignmentFlag.AlignCenter)
 
-    def _make_group(self, title: str) -> QGroupBox:
-        """Create a styled group box."""
-        group = QGroupBox(title)
-        group.setStyleSheet(
-            "QGroupBox { color: white; font-size: 14px; font-weight: bold; "
-            "border: 1px solid #444466; border-radius: 6px; padding-top: 20px; "
-            "margin-top: 10px; background: rgba(30, 30, 50, 150); }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }"
+        return block
+
+    # ── Style helpers ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _toggle_style() -> str:
+        """Checkbox styled as toggle (XAML: Panuon Switch, cyan when checked)."""
+        return (
+            f"QCheckBox {{ color: {COLOR_TEXT}; font-size: 15px; background: transparent; }}"
+            "QCheckBox::indicator { width: 32px; height: 16px; border-radius: 8px; }"
+            "QCheckBox::indicator:unchecked { background: #DEDEDE; }"
+            f"QCheckBox::indicator:checked {{ background: {COLOR_CYAN}; }}"
         )
-        group.setLayout(QVBoxLayout())
-        return group
+
+    @staticmethod
+    def _radio_style() -> str:
+        """Radio button (XAML: PURadioButton, cyan when checked)."""
+        return (
+            f"QRadioButton {{ color: {COLOR_TEXT}; font-size: 15px; "
+            "background: transparent; }}"
+            "QRadioButton::indicator { width: 16px; height: 16px; }"
+            "QRadioButton::indicator:unchecked { background: white; "
+            "border: 2px solid white; border-radius: 8px; }"
+            f"QRadioButton::indicator:checked {{ background: {COLOR_CYAN}; "
+            f"border: 2px solid {COLOR_CYAN}; border-radius: 8px; }}"
+        )
+
+    # ── Event Handlers ────────────────────────────────────────────────
 
     def _load_saved_prefs(self) -> None:
-        """Load saved preferences from config on startup."""
         if not hasattr(self._ctx, "config"):
             return
         cfg = self._ctx.config
-
-        # Brightness
         brightness = cfg.get("brightness", 100)
         if isinstance(brightness, int):
             self._brightness_slider.setValue(brightness)
-
-        # Temperature unit
         temp_unit = cfg.get("temp_unit", "celsius")
         if temp_unit == "fahrenheit":
             self._radio_fahrenheit.setChecked(True)
-        else:
-            self._radio_celsius.setChecked(True)
-
-        # Language (already handled by i18n setup from config)
         log.debug("Loaded saved preferences from config")
 
     def _on_startup_changed(self) -> None:
-        """Save startup/minimize preferences."""
         if hasattr(self._ctx, "config"):
             self._ctx.config.set("start_on_boot", self._start_on_boot.isChecked())
             self._ctx.config.set("minimize_to_tray", self._minimize_to_tray.isChecked())
@@ -279,28 +356,18 @@ class PageSettings(QWidget):
                   self._start_on_boot.isChecked(), self._minimize_to_tray.isChecked())
 
     def _on_language_changed(self, index: int) -> None:
-        """Handle language selection change, save, and refresh visible labels."""
         lang_code = self._lang_combo.itemData(index)
         if not lang_code:
             return
-
         log.info("Language changed to: %s", lang_code)
         setup_i18n(lang_code)
-
         if hasattr(self._ctx, "config"):
             self._ctx.config.set("language", lang_code)
 
-        # Refresh labels on this page
-        self._radio_celsius.setText(t("gui.settings.celsius"))
-        self._radio_fahrenheit.setText(t("gui.settings.fahrenheit"))
-
     def _on_brightness_changed(self, value: int) -> None:
-        """Handle brightness slider change and save."""
-        self._brightness_label.setText(f"{value}%")
-
+        self._brightness_label.setText(str(value))
         if hasattr(self._ctx, "config"):
             self._ctx.config.set("brightness", value)
-
         if self._ctx.set_brightness:
             self._ctx.set_brightness.execute(value)
             log.info("Brightness set to %d%%", value)
