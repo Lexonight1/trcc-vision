@@ -2,7 +2,7 @@
   "app.name": "TR-VISION HOME",
   "app.description": "Cross-platform fan controller & LCD screen manager",
 
-  "cli.version": "trivision {version}",
+  "cli.version": "trcc-vision {version}",
   "cli.detect.scanning": "Scanning for devices...",
   "cli.detect.none_found": "No devices found",
   "cli.detect.not_available": "Device detection not available (no protocol layer yet)",
@@ -165,6 +165,7 @@
   "gui.btn.confirm": "Confirm",
   "gui.btn.ok": "OK",
   "gui.btn.delete": "Delete",
+  "gui.btn.edit": "Edit",
   "gui.btn.exit": "Exit",
   "gui.btn.yes": "Yes",
   "gui.btn.no": "No",

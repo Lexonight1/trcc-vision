@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QRadioButton,
     QSlider,
     QVBoxLayout,
@@ -56,6 +58,7 @@ class PageSettings(QWidget):
             bg_label.setGeometry(0, 0, 1160, 460)
             bg_label.lower()
 
+        self._setup_startup(layout)
         self._setup_language(layout)
         self._setup_temperature(layout)
         self._setup_brightness(layout)
@@ -68,9 +71,36 @@ class PageSettings(QWidget):
 
         log.info("PageSettings created")
 
+    def _setup_startup(self, parent: QVBoxLayout) -> None:
+        """Start on boot / minimize to tray toggles."""
+        group = self._make_group(t("gui.settings.startup_mode"))
+
+        # Start on boot
+        row1 = QHBoxLayout()
+        self._start_on_boot = QCheckBox(t("gui.settings.start_on_boot"))
+        self._start_on_boot.setStyleSheet(
+            "QCheckBox { color: #ededed; background: transparent; font-size: 13px; }"
+            "QCheckBox::indicator { width: 18px; height: 18px; }"
+            "QCheckBox::indicator:checked { background: #847148; border: 1px solid #847148; }"
+            "QCheckBox::indicator:unchecked { background: #222222; border: 1px solid #555; }"
+        )
+        self._start_on_boot.stateChanged.connect(self._on_startup_changed)
+        row1.addWidget(self._start_on_boot)
+        row1.addStretch()
+
+        # Minimize to tray
+        self._minimize_to_tray = QCheckBox(t("gui.settings.minimize_to_tray"))
+        self._minimize_to_tray.setStyleSheet(self._start_on_boot.styleSheet())
+        self._minimize_to_tray.stateChanged.connect(self._on_startup_changed)
+        row1.addWidget(self._minimize_to_tray)
+        row1.addStretch()
+
+        group.layout().addLayout(row1)  # type: ignore[union-attr]
+        parent.addWidget(group)
+
     def _setup_language(self, parent: QVBoxLayout) -> None:
         """Language selector."""
-        group = self._make_group(t("gui.settings.lang_version"))
+        group = self._make_group(t("settings.language"))
 
         row = QHBoxLayout()
         label = QLabel(t("settings.language"))
@@ -135,7 +165,7 @@ class PageSettings(QWidget):
         self._brightness_slider.setValue(100)
         self._brightness_slider.setStyleSheet(
             "QSlider::groove:horizontal { background: #333355; height: 6px; border-radius: 3px; }"
-            "QSlider::handle:horizontal { background: #00aaff; width: 16px; "
+            "QSlider::handle:horizontal { background: #847148; width: 16px; "
             "margin: -5px 0; border-radius: 8px; }"
         )
         self._brightness_slider.setMinimumWidth(300)
@@ -155,21 +185,56 @@ class PageSettings(QWidget):
         parent.addWidget(group)
 
     def _setup_about(self, parent: QVBoxLayout) -> None:
-        """Version info section."""
+        """Version info + check update section."""
         group = self._make_group(t("settings.about"))
+        glayout = group.layout()
+        assert glayout is not None
 
         info = self._ctx.get_system_info.execute()
-        text = (
-            f"{t('gui.settings.software_version')}: {info.app_version}\n"
-            f"Python: {info.python_version.split()[0]}\n"
-            f"{t('cli.info.platform', platform=info.platform_name)}\n"
-            f"{t('cli.info.os', os=info.os_version)}"
-        )
 
-        about = QLabel(text)
-        about.setStyleSheet("color: #aaaaaa; font-size: 12px; background: transparent;")
-        about.setWordWrap(True)
-        group.layout().addWidget(about)  # type: ignore[union-attr]
+        # Software version row
+        sw_row = QHBoxLayout()
+        sw_label = QLabel(t("gui.settings.software_version"))
+        sw_label.setStyleSheet("color: #ededed; font-size: 13px; background: transparent;")
+        sw_row.addWidget(sw_label)
+        sw_val = QLabel(info.app_version)
+        sw_val.setStyleSheet("color: #847148; font-size: 13px; font-weight: bold; "
+                             "background: transparent;")
+        sw_row.addWidget(sw_val)
+        sw_row.addStretch()
+        glayout.addLayout(sw_row)
+
+        # Terminal version row
+        tv_row = QHBoxLayout()
+        tv_label = QLabel(t("gui.settings.terminal_version"))
+        tv_label.setStyleSheet("color: #ededed; font-size: 13px; background: transparent;")
+        tv_row.addWidget(tv_label)
+        tv_val = QLabel("—")  # populated when device connects
+        tv_val.setStyleSheet("color: #847148; font-size: 13px; font-weight: bold; "
+                             "background: transparent;")
+        tv_row.addWidget(tv_val)
+        tv_row.addStretch()
+
+        update_btn = QPushButton(t("gui.settings.check_update"))
+        update_btn.setStyleSheet(
+            "QPushButton { background: #847148; color: white; border: none; "
+            "border-radius: 4px; padding: 6px 16px; font-size: 12px; }"
+            "QPushButton:hover { background: #A1864B; }"
+        )
+        update_btn.clicked.connect(lambda: log.info("Check update clicked (not implemented)"))
+        tv_row.addWidget(update_btn)
+        glayout.addLayout(tv_row)
+
+        # Platform info
+        platform_text = (
+            f"Python {info.python_version.split()[0]}  |  "
+            f"{info.platform_name}  |  {info.os_version}"
+        )
+        platform_label = QLabel(platform_text)
+        platform_label.setStyleSheet("color: #777777; font-size: 11px; background: transparent;")
+        platform_label.setWordWrap(True)
+        glayout.addWidget(platform_label)
+
         parent.addWidget(group)
 
     def _make_group(self, title: str) -> QGroupBox:
@@ -204,6 +269,14 @@ class PageSettings(QWidget):
 
         # Language (already handled by i18n setup from config)
         log.debug("Loaded saved preferences from config")
+
+    def _on_startup_changed(self) -> None:
+        """Save startup/minimize preferences."""
+        if hasattr(self._ctx, "config"):
+            self._ctx.config.set("start_on_boot", self._start_on_boot.isChecked())
+            self._ctx.config.set("minimize_to_tray", self._minimize_to_tray.isChecked())
+        log.debug("Startup prefs: boot=%s tray=%s",
+                  self._start_on_boot.isChecked(), self._minimize_to_tray.isChecked())
 
     def _on_language_changed(self, index: int) -> None:
         """Handle language selection change, save, and refresh visible labels."""

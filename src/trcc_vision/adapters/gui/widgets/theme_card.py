@@ -89,8 +89,8 @@ class ThemeCard(QWidget):
     def _update_style(self) -> None:
         if self._is_selected:
             self.setStyleSheet(
-                "ThemeCard { border: 2px solid #00aaff; border-radius: 6px; "
-                "background: rgba(0, 170, 255, 30); }"
+                "ThemeCard { border: 2px solid #847148; border-radius: 6px; "
+                "background: rgba(132, 113, 72, 40); }"
             )
         else:
             self.setStyleSheet(

@@ -82,7 +82,7 @@ LCD_HEIGHT = 480
 # ── Theme editor ────────────────────────────────────────────────────
 
 EDITOR_CANVAS_SIZE = 480
-EDITOR_SELECTION_COLOR = "#00aaff"
+EDITOR_SELECTION_COLOR = "#847148"
 EDITOR_PROPERTY_PANEL_WIDTH = 350
 
 # ── Sensor polling ──────────────────────────────────────────────────────

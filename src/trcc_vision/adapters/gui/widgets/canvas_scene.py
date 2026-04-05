@@ -96,7 +96,7 @@ class CanvasItem(QGraphicsObject):
     def _draw_selection(self, painter: QPainter) -> None:
         """Draw a dashed selection rect when this item is selected."""
         if self.isSelected():
-            pen = QPen(QColor("#00aaff"), 1.5, Qt.PenStyle.DashLine)
+            pen = QPen(QColor("#847148"), 1.5, Qt.PenStyle.DashLine)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self.boundingRect())
