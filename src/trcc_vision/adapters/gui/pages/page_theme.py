@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -29,6 +29,7 @@ from trcc_vision.infrastructure.theme_xml_parser import ThemeXmlParser
 
 if TYPE_CHECKING:
     from trcc_vision.core.context import AppContext
+    from trcc_vision.core.models import ThemeConfig, ThemeInfo
 
 log = logging.getLogger(__name__)
 
@@ -36,12 +37,16 @@ log = logging.getLogger(__name__)
 class PageTheme(QWidget):
     """Theme browser with preview and selection."""
 
+    edit_requested = Signal(object, object)  # (ThemeInfo, ThemeConfig)
+
     def __init__(self, ctx: AppContext) -> None:
         super().__init__()
         self._ctx = ctx
         self._parser = ThemeXmlParser()
         self._cards: list[ThemeCard] = []
         self._selected_theme: str | None = None
+        self._selected_theme_info: ThemeInfo | None = None
+        self._selected_config: ThemeConfig | None = None
 
         self.setStyleSheet("background: transparent;")
 
@@ -123,6 +128,12 @@ class PageTheme(QWidget):
         apply_btn.clicked.connect(self._on_apply)
         btn_row.addWidget(apply_btn)
 
+        edit_btn = ImageButton(
+            GUI_ASSETS / "btn_ok.png", tooltip=t("gui.btn.edit"),
+        )
+        edit_btn.clicked.connect(self._on_edit)
+        btn_row.addWidget(edit_btn)
+
         btn_row.addStretch()
         right_layout.addLayout(btn_row)
         right_layout.addStretch()
@@ -169,14 +180,24 @@ class PageTheme(QWidget):
                 xml_path = THEME_ASSETS / f"Theme{i}.xml"
                 if not xml_path.exists():
                     break
+                from trcc_vision.core.models import ThemeInfo as TI
+                theme_info = TI(name=name, path=xml_path)
                 if self._ctx.load_theme:
-                    from trcc_vision.core.models import ThemeInfo
-                    theme_info = ThemeInfo(name=name, path=xml_path)
                     config = self._ctx.load_theme.execute(theme_info)
                 else:
                     config = self._parser.parse(xml_path)
+                self._selected_theme_info = theme_info
+                self._selected_config = config
                 self._preview.set_theme(config)
                 break
+
+    def _on_edit(self) -> None:
+        """Open the theme editor for the selected theme."""
+        if not self._selected_theme_info or not self._selected_config:
+            log.warning("No theme selected to edit")
+            return
+        log.info("Edit requested for: %s", self._selected_theme_info.name)
+        self.edit_requested.emit(self._selected_theme_info, self._selected_config)
 
     def _on_apply(self) -> None:
         """Apply selected theme to device."""

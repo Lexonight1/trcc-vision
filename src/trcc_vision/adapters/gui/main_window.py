@@ -216,6 +216,42 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._page_theme)
         self._pages.addWidget(self._page_settings)
 
+        # Connect theme editor navigation
+        self._page_theme.edit_requested.connect(self._open_theme_editor)
+        self._editor_page: QWidget | None = None
+
+    # ── Theme editor navigation ──────────────────────────────────────
+
+    def _open_theme_editor(self, theme_info: object, config: object) -> None:
+        """Open the theme editor for the given theme."""
+        from trcc_vision.adapters.gui.pages.page_theme_editor import PageThemeEditor
+        from trcc_vision.core.models import ThemeConfig, ThemeInfo
+
+        assert isinstance(theme_info, ThemeInfo)
+        assert isinstance(config, ThemeConfig)
+
+        # Remove previous editor page if any
+        if self._editor_page is not None:
+            self._pages.removeWidget(self._editor_page)
+            self._editor_page.deleteLater()
+
+        editor = PageThemeEditor(self._ctx, theme_info, config)
+        editor.back_requested.connect(self._close_theme_editor)
+        self._editor_page = editor
+
+        idx = self._pages.addWidget(editor)
+        self._pages.setCurrentIndex(idx)
+        log.info("Opened theme editor for: %s", theme_info.name)
+
+    def _close_theme_editor(self) -> None:
+        """Return from the theme editor to the theme browser."""
+        self._pages.setCurrentWidget(self._page_theme)
+        if self._editor_page is not None:
+            self._pages.removeWidget(self._editor_page)
+            self._editor_page.deleteLater()
+            self._editor_page = None
+        log.info("Closed theme editor, back to theme browser")
+
     # ── Window dragging ─────────────────────────────────────────────
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
