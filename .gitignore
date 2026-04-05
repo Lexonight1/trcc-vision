@@ -39,3 +39,6 @@ htmlcov/
 /decompiled/
 /TR-VISION*/
 *.zip
+.claude/
+*.sln
+*.code-workspace
