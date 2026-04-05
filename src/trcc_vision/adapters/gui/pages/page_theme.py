@@ -117,21 +117,9 @@ class PageTheme(QWidget):
         apply_btn.clicked.connect(self._on_apply)
         left_layout.addWidget(apply_btn, 0, Qt.AlignmentFlag.AlignCenter)
 
-        # LCD preview: 480x480 rendered, displayed at 300x300 (XAML Viewbox)
-        preview_container = QWidget()
-        preview_container.setFixedSize(
-            THEME_PREVIEW_DISPLAY + 4, THEME_PREVIEW_DISPLAY + 4,
-        )
-        preview_container.setStyleSheet(
-            f"border: 1px solid {COLOR_ACCENT}; border-radius: 5px; background: black;"
-        )
-
-        self._preview = LCDPreview(preview_container)
-        # Scale the 480x480 widget to fit 300x300 display
-        # LCDPreview renders at 480x480 internally but we display at 300x300
-        self._preview.setFixedSize(THEME_PREVIEW_DISPLAY, THEME_PREVIEW_DISPLAY)
-
-        left_layout.addWidget(preview_container, 0, Qt.AlignmentFlag.AlignCenter)
+        # LCD preview: renders at 480x480, scaled to 300x300 display (XAML Viewbox)
+        self._preview = LCDPreview(display_size=THEME_PREVIEW_DISPLAY)
+        left_layout.addWidget(self._preview, 0, Qt.AlignmentFlag.AlignCenter)
 
         # Edit button
         edit_btn = ImageButton(

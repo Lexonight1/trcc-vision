@@ -31,21 +31,25 @@ log = logging.getLogger(__name__)
 class LCDPreview(QWidget):
     """480x480 LCD preview panel — renders themes with QPainter."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, display_size: int = 0) -> None:
+        """Create LCD preview. display_size=0 means full 480x480, otherwise scales."""
         super().__init__(parent)
-        self.setFixedSize(LCD_WIDTH, LCD_HEIGHT)
+        self._display_size = display_size or LCD_WIDTH
+        self.setFixedSize(self._display_size, self._display_size)
 
         self._display = QLabel(self)
-        self._display.setFixedSize(LCD_WIDTH, LCD_HEIGHT)
+        self._display.setFixedSize(self._display_size, self._display_size)
         self._display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._display.setScaledContents(True)
         self._display.setStyleSheet(
-            "background: #000000; border: 2px solid #333355; border-radius: 4px;"
+            "background: #000000; border: 1px solid #847148; border-radius: 5px;"
         )
 
         self._config: ThemeConfig | None = None
         self._readings: dict[int, SensorReading] = {}
 
-        log.debug("LCDPreview created: %dx%d", LCD_WIDTH, LCD_HEIGHT)
+        log.debug("LCDPreview created: render=%dx%d display=%dx%d",
+                  LCD_WIDTH, LCD_HEIGHT, self._display_size, self._display_size)
 
     def set_theme(self, config: ThemeConfig) -> None:
         """Set the active theme and re-render."""
