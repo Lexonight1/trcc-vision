@@ -67,7 +67,7 @@ _SENSOR_CARDS_RIGHT: list[tuple[int, str, str]] = [
     (SensorType.GPU_SPEED, "card_cpu_voltage.png", "sensor.gpu_speed"),
     (SensorType.GPU_POWER, "card_cpu_voltage.png", "sensor.gpu_power"),
     (SensorType.HDD_CAPACITY, "card_generic.png", "sensor.hdd_capacity"),
-    (SensorType.HDD_USAGE, "card_generic.png", "sensor.hdd_usage"),
+    (SensorType.HDD_USED_RATE, "card_generic.png", "sensor.hdd_usage"),
     (SensorType.LAN_UPLOAD, "card_generic.png", "sensor.upload"),
     (SensorType.LAN_DOWNLOAD, "card_generic.png", "sensor.download"),
 ]
