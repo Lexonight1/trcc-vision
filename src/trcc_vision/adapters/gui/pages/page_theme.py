@@ -106,9 +106,31 @@ class PageTheme(QWidget):
         )
         left_layout.addWidget(title)
 
-        # LCD preview
-        self._preview = LCDPreview()
-        left_layout.addWidget(self._preview, 0, Qt.AlignmentFlag.AlignCenter)
+        # LCD preview with background frame
+        preview_frame = QWidget()
+        preview_frame.setFixedSize(500, 560)
+        preview_frame.setStyleSheet("background: transparent;")
+
+        # Frame background image
+        from PySide6.QtGui import QPixmap
+
+        frame_bg = QPixmap(str(GUI_ASSETS / "bg_theme_preview.png"))
+        if not frame_bg.isNull():
+            frame_label = QLabel(preview_frame)
+            scaled = frame_bg.scaled(
+                500, 560,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            frame_label.setPixmap(scaled)
+            frame_label.setGeometry(0, 0, 500, 560)
+            frame_label.lower()
+
+        # LCD preview centered in frame
+        self._preview = LCDPreview(preview_frame)
+        self._preview.move(10, 10)
+
+        left_layout.addWidget(preview_frame, 0, Qt.AlignmentFlag.AlignCenter)
 
         # Action buttons
         btn_row = QHBoxLayout()
@@ -204,21 +226,37 @@ class PageTheme(QWidget):
         parent.addWidget(right)
 
     def _make_sensor_card(self, sensor_type: int, icon_file: str, label_key: str) -> QWidget:
-        """Create a single sensor readout card."""
+        """Create a single sensor readout card with icon."""
+        from PySide6.QtGui import QPixmap
+
         card = QWidget()
         card.setObjectName("sensorCard")
         card.setFixedSize(_CARD_SIZE, _CARD_SIZE)
         card.setStyleSheet(_CARD_STYLE)
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(2)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Icon
+        icon_path = GUI_ASSETS / icon_file
+        icon_pixmap = QPixmap(str(icon_path))
+        if not icon_pixmap.isNull():
+            icon_label = QLabel()
+            icon_label.setPixmap(icon_pixmap.scaled(
+                32, 32,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+            icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            icon_label.setStyleSheet("background: transparent;")
+            layout.addWidget(icon_label)
 
         # Value (large, prominent)
         value_label = QLabel("—")
         value_label.setStyleSheet(
-            "color: #ededed; font-size: 18px; font-weight: bold; background: transparent;"
+            "color: #ededed; font-size: 16px; font-weight: bold; background: transparent;"
         )
         value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(value_label)
@@ -226,7 +264,7 @@ class PageTheme(QWidget):
         # Sensor name
         name_label = QLabel(t(label_key))
         name_label.setStyleSheet(
-            "color: #847148; font-size: 10px; background: transparent;"
+            "color: #847148; font-size: 9px; background: transparent;"
         )
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setWordWrap(True)

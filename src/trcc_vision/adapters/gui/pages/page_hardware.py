@@ -119,7 +119,7 @@ class PageHardware(QWidget):
         # Fan status section
         self._fan_label = QLabel("")
         self._fan_label.setStyleSheet(
-            "color: #88ccff; font-size: 12px; background: transparent; font-family: monospace;"
+            "color: #847148; font-size: 12px; background: transparent; font-family: monospace;"
         )
         self._fan_label.setWordWrap(True)
         cat_layout.addWidget(self._fan_label)
@@ -137,10 +137,23 @@ class PageHardware(QWidget):
         parent_layout.addWidget(sidebar)
 
     def _setup_sensor_panel(self, parent_layout: QHBoxLayout) -> None:
-        """Right panel with scrollable sensor card grid."""
+        """Right panel with scrollable sensor card grid + background."""
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Panel background image
+        bg = QPixmap(str(GUI_ASSETS / "bg_hw_panel.png"))
+        if not bg.isNull():
+            bg_label = QLabel(panel)
+            scaled = bg.scaled(
+                687, 650,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            bg_label.setPixmap(scaled)
+            bg_label.setGeometry(0, 0, 687, 650)
+            bg_label.lower()
 
         # Scroll area for sensor cards
         scroll = QScrollArea()
@@ -148,8 +161,8 @@ class PageHardware(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
             "QScrollArea { background: transparent; border: none; }"
-            "QScrollBar:vertical { background: #2a2a3e; width: 8px; }"
-            "QScrollBar::handle:vertical { background: #555577; border-radius: 4px; }"
+            "QScrollBar:vertical { background: #222222; width: 8px; }"
+            "QScrollBar::handle:vertical { background: #847148; border-radius: 4px; }"
         )
 
         self._card_container = QWidget()

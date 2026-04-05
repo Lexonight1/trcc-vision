@@ -76,7 +76,7 @@ class SensorCard(QWidget):
         # Value + unit
         self._value = QLabel("")
         self._value.setStyleSheet(
-            "color: #00ff88; font-size: 14px; font-weight: bold; background: transparent;"
+            "color: #ededed; font-size: 14px; font-weight: bold; background: transparent;"
         )
         self._value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(self._value)

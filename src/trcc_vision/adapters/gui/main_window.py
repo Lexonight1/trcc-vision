@@ -111,7 +111,39 @@ class MainWindow(QMainWindow):
     # ── Title bar ───────────────────────────────────────────────────
 
     def _setup_titlebar(self) -> None:
-        """Create close/minimize buttons and device status indicator."""
+        """Create titlebar with background, buttons, and device status."""
+        # Titlebar background image
+        tb_path = GUI_ASSETS / "bg_titlebar.png"
+        tb_pixmap = QPixmap(str(tb_path))
+        if not tb_pixmap.isNull():
+            tb_label = QLabel(self._root)
+            scaled = tb_pixmap.scaled(
+                WINDOW_WIDTH, TITLEBAR_HEIGHT,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            tb_label.setPixmap(scaled)
+            tb_label.setGeometry(0, 0, WINDOW_WIDTH, TITLEBAR_HEIGHT)
+
+        # App title
+        title = QLabel(t("app.name"), self._root)
+        title.setStyleSheet(
+            "color: white; font-size: 16px; font-weight: bold; background: transparent;"
+        )
+        title.move(30, 22)
+
+        # Connection status icon + text
+        self._device_status_icon = QLabel(self._root)
+        self._device_status_icon.move(DEVICE_STATUS_X, DEVICE_STATUS_Y)
+        self._device_status_icon.setStyleSheet("background: transparent;")
+
+        self._device_status_text = QLabel(self._root)
+        self._device_status_text.move(DEVICE_STATUS_X + 50, DEVICE_STATUS_Y + 2)
+        self._device_status_text.setStyleSheet(
+            "color: #ededed; font-size: 12px; background: transparent;"
+        )
+        self._update_device_status()
+
         # Close button
         close_path = GUI_ASSETS / "btn_close.png"
         self._btn_close = ImageButton(close_path, self._root, tooltip=t("gui.btn.exit"))
@@ -124,36 +156,24 @@ class MainWindow(QMainWindow):
         self._btn_min.move(BTN_MIN_X, BTN_MIN_Y)
         self._btn_min.clicked.connect(self.showMinimized)
 
-        # Device status indicator
-        self._device_status = QLabel(self._root)
-        self._update_device_status()
-        self._device_status.move(DEVICE_STATUS_X, DEVICE_STATUS_Y)
-
-        # App title
-        title = QLabel(t("app.name"), self._root)
-        title.setStyleSheet(
-            "color: white; font-size: 16px; font-weight: bold; background: transparent;"
-        )
-        title.move(30, 22)
-
     def _update_device_status(self) -> None:
-        """Update the device connection indicator."""
+        """Update the device connection indicator (icon + text)."""
         if self._ctx.mock or (
             self._ctx.get_device_status
             and self._ctx.get_device_status.execute().connected
         ):
             icon = GUI_ASSETS / "icon_connected.png"
-            tip = t("gui.device.connected")
+            text = t("gui.device.connected")
         else:
             icon = GUI_ASSETS / "icon_disconnected.png"
-            tip = t("gui.device.disconnected")
+            text = t("gui.device.disconnected")
 
         pixmap = QPixmap(str(icon))
         if not pixmap.isNull():
-            self._device_status.setPixmap(pixmap)
-            self._device_status.setFixedSize(pixmap.size())
-        self._device_status.setToolTip(tip)
-        self._device_status.setStyleSheet("background: transparent;")
+            self._device_status_icon.setPixmap(pixmap)
+            self._device_status_icon.setFixedSize(pixmap.size())
+        self._device_status_icon.setToolTip(text)
+        self._device_status_text.setText(text)
 
     # ── Navigation tabs ─────────────────────────────────────────────
 
@@ -175,13 +195,24 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda idx=i: self._select_tab(idx))
             self._tab_buttons.append(btn)
 
-            # Tab icon + label overlay
+            # Tab icon
+            icon_path = GUI_ASSETS / tab["icon"]
+            icon_pixmap = QPixmap(str(icon_path))
+            if not icon_pixmap.isNull():
+                icon_label = QLabel(self._root)
+                icon_label.setPixmap(icon_pixmap)
+                icon_label.setFixedSize(icon_pixmap.size())
+                icon_label.move(x + 10, NAV_Y + 8)
+                icon_label.setStyleSheet("background: transparent;")
+                icon_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+            # Tab text label
             label = QLabel(self._root)
             label.setText(f"  {t(tab['label'])}")
             label.setStyleSheet(
-                "color: white; font-size: 13px; background: transparent;"
+                "color: white; font-size: 12px; background: transparent;"
             )
-            label.setGeometry(x + 10, NAV_Y + 5, NAV_TAB_WIDTH - 20, NAV_TAB_HEIGHT - 10)
+            label.setGeometry(x + 35, NAV_Y + 5, NAV_TAB_WIDTH - 45, NAV_TAB_HEIGHT - 10)
             label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             self._tab_labels.append(label)
 
