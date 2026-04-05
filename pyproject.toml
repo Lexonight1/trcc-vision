@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trcc-vision"
+dynamic = ["version"]
+description = "Cross-platform fan controller & LCD screen manager for Thermalright TR-VISION HOME devices"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.10"
+authors = [{ name = "Lexonight" }]
+keywords = ["thermalright", "tr-vision", "fan-controller", "lcd", "hardware"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Hardware",
+]
+dependencies = [
+    "Pillow>=10.0",
+    "numpy>=1.24",
+    "typer>=0.9",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.5"]
+api = ["fastapi>=0.100", "uvicorn>=0.23"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "pyright>=1.1",
+]
+sensors = ["psutil>=5.9"]
+
+[project.scripts]
+trcc-vision = "trcc_vision.adapters.cli.app:main"
+
+[tool.hatch.version]
+path = "src/trcc_vision/__version__.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trcc_vision"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-x -q"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "TCH"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["TCH"]  # tests need runtime imports for fixtures and assertions
+
+[tool.pyright]
+pythonVersion = "3.10"
+pythonPlatform = "All"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"

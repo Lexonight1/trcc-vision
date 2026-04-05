@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<FontList xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<ItemList>
+		<ComboxItem>
+			<DataNum>0</DataNum>
+			<Name>黑体</Name>
+			<FileName></FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>1</DataNum>
+			<Name>微软雅黑</Name>
+			<FileName>msyh.ttc</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>2</DataNum>
+			<Name>NI7SEG</Name>
+			<FileName>NI7SEG.TTF</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>3</DataNum>
+			<Name>Arial</Name>
+			<FileName>arial.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>4</DataNum>
+			<Name>Calibri</Name>
+			<FileName>calibri.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>5</DataNum>
+			<Name>Georgia</Name>
+			<FileName>georgia.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>6</DataNum>
+			<Name>Impact</Name>
+			<FileName>impact.ttf</FileName>
+		</ComboxItem>
+		<!--新增鸿蒙字体-->
+		<ComboxItem>
+			<DataNum>7</DataNum>
+			<Name>HarmonyOS Sans Black</Name>
+			<FileName>HarmonyOS_Sans_Black.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>8</DataNum>
+			<Name>HarmonyOS Sans</Name>
+			<FileName>HarmonyOS_Sans_Bold.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>9</DataNum>
+			<Name>HarmonyOS Sans Light</Name>
+			<FileName>HarmonyOS_Sans_Light.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>10</DataNum>
+			<Name>HarmonyOS Sans Medium</Name>
+			<FileName>HarmonyOS_Sans_Medium.ttf</FileName>
+		</ComboxItem>
+		<ComboxItem>
+			<DataNum>11</DataNum>
+			<Name>HarmonyOS Sans Thin</Name>
+			<FileName>HarmonyOS_Sans_Thin.ttf</FileName>
+		</ComboxItem>
+	</ItemList>
+</FontList>

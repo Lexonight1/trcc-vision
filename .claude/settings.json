@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet --version)",
+      "Bash(grep -l \"class Page\" \"/home/ignorant/Desktop/projects/trcc-trivision/decompiled/WFanManager/WFanManager.View/\"*.cs)",
+      "Bash(xargs -I{} head -5 {})",
+      "Bash(PYTHONPATH=src python -m pytest tests/ -x -q)",
+      "Bash(ruff check:*)",
+      "Bash(PYTHONPATH=src python -m pyright src/)",
+      "Read(//home/ignorant/Desktop/projects/thermalright-trcc-linux/**)",
+      "Bash(grep -v \"^Txt_$\")",
+      "Bash(python3)",
+      "Bash(chmod +x /home/ignorant/Desktop/projects/trcc-trivision/dev/mock_gui.py)",
+      "Bash(python3 -c ':*)",
+      "Bash(grep -h \"VideoFile\\\\|\\\\.mp4\\\\|\\\\.gif\" src/trivision/assets/themes/Theme*.xml)",
+      "Bash(grep -v \"^$\")"
+    ],
+    "additionalDirectories": [
+      "/home/ignorant/Desktop/projects/trcc-trivision"
+    ]
+  }
+}
