@@ -17,11 +17,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from trcc_vision.core.ports import DevicePort
-from trcc_vision.protocols.adb import ADBProtocol
 from trcc_vision.protocols.tcp_client import TCPClient
 
 if TYPE_CHECKING:
     from trcc_vision.core.models import DeviceInfo
+    from trcc_vision.protocols.adb import ADBPort
     from trcc_vision.protocols.message import Message
 
 log = logging.getLogger(__name__)
@@ -44,12 +44,18 @@ class DeviceProtocol(DevicePort):
 
     def __init__(
         self,
-        adb: ADBProtocol | None = None,
+        adb: ADBPort | None = None,
         tcp: TCPClient | None = None,
     ) -> None:
-        self._adb = adb or ADBProtocol()
+        self._adb = adb or self._default_adb()
         self._tcp = tcp or TCPClient()
         self._device: DeviceInfo | None = None
+
+    @staticmethod
+    def _default_adb() -> ADBPort:
+        """Create the platform-appropriate ADB adapter."""
+        from trcc_vision.protocols.adb_factory import create_adb_port
+        return create_adb_port()
 
     def connect(self, device: DeviceInfo) -> None:
         """Establish ADB + TCP connection to device."""

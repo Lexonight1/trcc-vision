@@ -181,10 +181,11 @@ class TestAppContextMock:
         assert ctx.set_fan_duty is not None
         assert ctx.read_all_sensors is not None
 
-    def test_non_mock_context_has_none_device(self) -> None:
+    def test_non_mock_context_has_real_device(self) -> None:
         from trcc_vision.core.context import AppContext
 
         ctx = AppContext(mock=False)
         assert ctx.mock is False
-        assert ctx.detect_devices is None
-        assert ctx.get_fan_states is None
+        assert ctx.detect_devices is not None
+        assert ctx.device_service is not None
+        assert ctx.get_fan_states is None  # FanPort not yet wired

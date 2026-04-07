@@ -125,10 +125,20 @@ class AppContext:
         log.info("Mock device auto-connected: %s", MOCK_DEVICE.name)
 
     def _init_real(self) -> None:
-        """Wire real ports — None until protocol layer connects to hardware."""
-        self.device_service: DeviceService | None = None  # type: ignore[no-redef]
-        self.display_service: DisplayService | None = None  # type: ignore[no-redef]
-        self.fan_service: FanService | None = None  # type: ignore[no-redef]
+        """Wire real ports via platform-specific ADB factory."""
+        from trcc_vision.protocols.adb_factory import create_adb_port
+        from trcc_vision.protocols.device_protocol import DeviceProtocol
+
+        adb_port = create_adb_port()
+        device_port = DeviceProtocol(adb=adb_port)
+
+        self.device_service: DeviceService | None = DeviceService(device_port)  # type: ignore[no-redef]
+        self.display_service: DisplayService | None = DisplayService(  # type: ignore[no-redef]
+            self.device_service,
+            self.theme_service,  # type: ignore[arg-type]
+            self.media_service,
+        )
+        self.fan_service: FanService | None = None  # type: ignore[no-redef]  # TODO: wire FanPort
 
     def _wire_device_use_cases(self) -> None:
         if self.device_service:
