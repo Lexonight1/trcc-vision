@@ -38,30 +38,87 @@ class DisplayService:
 
     def set_mode(self, mode: DisplayMode) -> None:
         """Switch display mode (background/screencast/video)."""
-        log.debug("set_mode() called: %s", mode.value)
         self._state.mode = mode
         log.info("Display mode → %s", mode.value)
 
     def set_rotation(self, rotation: Rotation) -> None:
-        """Set LCD rotation."""
-        log.debug("set_rotation() called: %d°", rotation.value)
+        """Set LCD rotation and send command to device."""
+        from trcc_vision.protocols.commands import rotation as rotation_cmd
+
         self._state.rotation = rotation
+        if self._device.is_connected:
+            msg = rotation_cmd(rotation.value)
+            self._device.send_command(msg.serialize())
         log.info("Rotation → %d°", rotation.value)
 
     def set_brightness(self, percent: int) -> None:
-        """Set LCD brightness (0-100)."""
-        log.debug("set_brightness() called: %d%%", percent)
+        """Set LCD brightness (0-100) and send command to device."""
+        from trcc_vision.protocols.commands import brightness
+
         self._state.brightness = max(0, min(100, percent))
+        if self._device.is_connected:
+            msg = brightness(self._state.brightness)
+            self._device.send_command(msg.serialize())
         log.info("Brightness → %d%%", self._state.brightness)
 
+    def screen_power(self, on: bool) -> None:
+        """Turn LCD screen on or off."""
+        from trcc_vision.protocols.commands import screen_power
+
+        if self._device.is_connected:
+            msg = screen_power(on)
+            self._device.send_command(msg.serialize())
+        log.info("Screen → %s", "ON" if on else "OFF")
+
     def send_image(self, img: Image.Image) -> None:
-        """Resize, convert, and send a PIL image to the LCD."""
-        log.debug("send_image() called: %dx%d", img.width, img.height)
+        """Resize, convert to RGB565, and send a PIL image to the LCD."""
         device = self._device.selected
         if not device:
-            log.error("send_image() failed: no device selected")
             raise RuntimeError("No device selected")
 
-        img.resize((device.lcd_width, device.lcd_height))
-        # TODO: convert to RGB565 and send via device service
-        log.info("Sent %dx%d image to LCD", device.lcd_width, device.lcd_height)
+        # Resize to LCD dimensions
+        resized = img.resize((device.lcd_width, device.lcd_height))
+
+        # Convert to RGB565
+        try:
+            from trcc_vision.protocols.commands import image_to_rgb565_numpy
+            rgb565 = image_to_rgb565_numpy(resized)
+        except ImportError:
+            from trcc_vision.protocols.commands import image_to_rgb565
+            rgb565 = image_to_rgb565(resized)
+
+        # Send frame to device
+        self._device.send_frame(rgb565, device.lcd_width, device.lcd_height)
+        log.info(
+            "Sent %dx%d image to LCD (%d bytes)",
+            device.lcd_width, device.lcd_height, len(rgb565),
+        )
+
+    def push_sensor_data(
+        self,
+        *,
+        cpu_temp: int = 0,
+        cpu_usage: int = 0,
+        cpu_speed_mhz: int = 0,
+        memory_usage: int = 0,
+        gpu_temp: int = 0,
+        gpu_load: int = 0,
+        fan_rpm: int = 0,
+    ) -> None:
+        """Push live sensor data to the device LCD overlay."""
+        from trcc_vision.protocols.commands import sensor_data
+
+        if not self._device.is_connected:
+            return
+
+        msg = sensor_data(
+            cpu_core_temp=cpu_temp,
+            cpu_usage=cpu_usage,
+            cpu_speed_mhz=cpu_speed_mhz,
+            memory_usage=memory_usage,
+            gpu_temp=gpu_temp,
+            gpu_load=gpu_load,
+            fan_rpm=fan_rpm,
+        )
+        self._device.send_command(msg.serialize())
+        log.debug("Pushed sensor data to device")

@@ -132,7 +132,7 @@ class AppContext:
         adb_port = create_adb_port()
         device_port = DeviceProtocol(adb=adb_port)
 
-        self.device_service: DeviceService | None = DeviceService(device_port)  # type: ignore[no-redef]
+        self.device_service: DeviceService | None = DeviceService(device_port, adb=adb_port)  # type: ignore[no-redef]
         self.display_service: DisplayService | None = DisplayService(  # type: ignore[no-redef]
             self.device_service,
             self.theme_service,  # type: ignore[arg-type]

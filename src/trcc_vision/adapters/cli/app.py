@@ -151,6 +151,140 @@ def info() -> None:
 
 
 @app.command()
+def connect(
+    address: str = typer.Argument(..., help="Device address (IP:port or ADB serial)"),
+) -> None:
+    """Connect to a TR-VISION device."""
+    log.info("connect command: %s", address)
+    ctx = _get_ctx()
+    if ctx.device_service is None:
+        typer.echo("Device service not available")
+        raise typer.Exit(1)
+
+    # Detect first, find matching device or create one
+    from trcc_vision.core.enums import ConnectionType
+    from trcc_vision.core.models import DeviceInfo
+
+    device = DeviceInfo(
+        name=f"TR-VISION ({address})",
+        connection=ConnectionType.ADB,
+        address=address,
+    )
+    try:
+        ctx.device_service.select(device)
+        typer.echo(f"Connected to {device.name}")
+    except Exception as e:
+        typer.echo(f"Connection failed: {e}")
+        raise typer.Exit(1) from None
+
+
+@app.command(name="send-image")
+def send_image(
+    image_path: str = typer.Argument(..., help="Path to image file (PNG, JPG, etc.)"),
+    address: str | None = typer.Option(
+        None, "--device", "-d", help="Device address",
+    ),
+) -> None:
+    """Send an image to the LCD display."""
+    from pathlib import Path
+
+    log.info("send-image command: %s", image_path)
+    ctx = _get_ctx()
+    if ctx.display_service is None or ctx.device_service is None:
+        typer.echo("Display service not available")
+        raise typer.Exit(1)
+
+    # Connect if not already connected
+    if not ctx.device_service.is_connected:
+        if address:
+            from trcc_vision.core.enums import ConnectionType
+            from trcc_vision.core.models import DeviceInfo
+
+            device = DeviceInfo(
+                name=f"TR-VISION ({address})",
+                connection=ConnectionType.ADB,
+                address=address,
+            )
+            try:
+                ctx.device_service.select(device)
+            except Exception as e:
+                typer.echo(f"Connection failed: {e}")
+                raise typer.Exit(1) from None
+        else:
+            typer.echo("No device connected. Use --device or 'trcc-vision connect' first.")
+            raise typer.Exit(1)
+
+    # Load and send image
+    img_path = Path(image_path)
+    if not img_path.is_file():
+        typer.echo(f"File not found: {image_path}")
+        raise typer.Exit(1)
+
+    try:
+        from PIL import Image
+
+        img = Image.open(img_path)
+        ctx.display_service.send_image(img)
+        typer.echo(f"Image sent to LCD: {img_path.name} ({img.width}x{img.height})")
+    except ImportError:
+        typer.echo("Pillow not installed (pip install Pillow)")
+        raise typer.Exit(1) from None
+    except Exception as e:
+        typer.echo(f"Failed to send image: {e}")
+        raise typer.Exit(1) from None
+
+
+@app.command(name="set-brightness")
+def set_brightness_cmd(
+    level: int = typer.Argument(..., help="Brightness level (0-100)"),
+    address: str | None = typer.Option(None, "--device", "-d", help="Device address"),
+) -> None:
+    """Set LCD brightness."""
+    log.info("set-brightness command: %d", level)
+    ctx = _get_ctx()
+    if ctx.display_service is None or ctx.device_service is None:
+        typer.echo("Display service not available")
+        raise typer.Exit(1)
+
+    if not ctx.device_service.is_connected and address:
+        from trcc_vision.core.enums import ConnectionType
+        from trcc_vision.core.models import DeviceInfo
+
+        device = DeviceInfo(
+            name=f"TR-VISION ({address})", connection=ConnectionType.ADB, address=address,
+        )
+        ctx.device_service.select(device)
+
+    ctx.display_service.set_brightness(level)
+    typer.echo(f"Brightness set to {level}%")
+
+
+@app.command(name="screen")
+def screen_cmd(
+    state: str = typer.Argument(..., help="'on' or 'off'"),
+) -> None:
+    """Turn LCD screen on or off."""
+    ctx = _get_ctx()
+    if ctx.display_service is None:
+        typer.echo("Display service not available")
+        raise typer.Exit(1)
+    on = state.lower() in ("on", "1", "true")
+    ctx.display_service.screen_power(on)
+    typer.echo(f"Screen turned {'on' if on else 'off'}")
+
+
+@app.command()
+def disconnect() -> None:
+    """Disconnect from current device."""
+    ctx = _get_ctx()
+    if ctx.device_service is None:
+        typer.echo("Device service not available")
+        return
+    ctx.device_service.disconnect()
+    typer.echo("Disconnected")
+
+
+@app.command()
 def gui() -> None:
     """Launch the PySide6 GUI."""
     log.info("gui command invoked (mock=%s)", _mock_mode)
