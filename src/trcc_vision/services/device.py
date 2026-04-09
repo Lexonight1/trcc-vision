@@ -9,18 +9,27 @@ from trcc_vision.core.enums import ConnectionType
 from trcc_vision.core.models import DeviceInfo
 
 if TYPE_CHECKING:
-    from trcc_vision.core.ports import DevicePort
+    from trcc_vision.core.ports import ConfigPort, DevicePort
     from trcc_vision.protocols.adb import ADBPort
 
 log = logging.getLogger(__name__)
+
+_CFG_LAST_DEVICE = "last_device_address"
+_CFG_LAST_CONN = "last_device_connection"
 
 
 class DeviceService:
     """Orchestrates device detection, selection, and frame sending."""
 
-    def __init__(self, device_port: DevicePort, adb: ADBPort | None = None) -> None:
+    def __init__(
+        self,
+        device_port: DevicePort,
+        adb: ADBPort | None = None,
+        config: ConfigPort | None = None,
+    ) -> None:
         self._port = device_port
         self._adb = adb
+        self._config = config
         self._selected: DeviceInfo | None = None
 
     def detect(self) -> list[DeviceInfo]:
@@ -60,6 +69,7 @@ class DeviceService:
         log.info("Connecting to device: %s (%s)", device.name, device.address)
         self._port.connect(device)
         self._selected = device
+        self._save_last_device(device)
         log.info("Device connected: %s", device.name)
 
     def disconnect(self) -> None:
@@ -68,6 +78,7 @@ class DeviceService:
             self._port.disconnect()
             log.info("Disconnected from %s", self._selected.name)
             self._selected = None
+            self._clear_last_device()
         else:
             log.debug("No device to disconnect")
 
@@ -91,6 +102,49 @@ class DeviceService:
         if not self._selected:
             raise RuntimeError("No device selected")
         return self._port.send_command(cmd)
+
+    def reconnect_last(self) -> bool:
+        """Reconnect to the last known device from persisted config.
+
+        Returns True if reconnection succeeded, False otherwise.
+        """
+        if self.is_connected:
+            return True
+        if not self._config:
+            return False
+
+        address = self._config.get(_CFG_LAST_DEVICE)
+        conn_type = self._config.get(_CFG_LAST_CONN, ConnectionType.ADB.value)
+        if not address or not isinstance(address, str):
+            return False
+
+        log.info("Reconnecting to last device: %s", address)
+        device = DeviceInfo(
+            name=f"TR-VISION ({address})",
+            connection=ConnectionType(conn_type),
+            address=address,
+        )
+        try:
+            self.select(device)
+            return True
+        except Exception:
+            log.warning("Failed to reconnect to last device: %s", address)
+            self._clear_last_device()
+            return False
+
+    def _save_last_device(self, device: DeviceInfo) -> None:
+        """Persist last connected device address to config."""
+        if self._config:
+            self._config.set(_CFG_LAST_DEVICE, device.address)
+            self._config.set(_CFG_LAST_CONN, device.connection.value)
+            log.debug("Saved last device: %s", device.address)
+
+    def _clear_last_device(self) -> None:
+        """Remove last device from config."""
+        if self._config:
+            self._config.set(_CFG_LAST_DEVICE, "")
+            self._config.set(_CFG_LAST_CONN, "")
+            log.debug("Cleared last device from config")
 
     def push_file(self, local_path: str, remote_path: str) -> bool:
         """Push a file to the device via ADB."""

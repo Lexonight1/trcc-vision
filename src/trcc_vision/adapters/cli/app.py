@@ -35,6 +35,56 @@ def _get_ctx():  # noqa: ANN202
     return _ctx
 
 
+def _ensure_connected(address: str | None = None) -> None:
+    """Ensure a device is connected — by address, saved state, or auto-detect.
+
+    Priority: explicit address > persisted last device > single-device auto-detect.
+    Raises typer.Exit(1) if no device can be connected.
+    """
+    ctx = _get_ctx()
+    if ctx.device_service is None:
+        typer.echo("Device service not available")
+        raise typer.Exit(1)
+
+    if ctx.device_service.is_connected:
+        return
+
+    # 1. Explicit address provided
+    if address:
+        from trcc_vision.core.enums import ConnectionType
+        from trcc_vision.core.models import DeviceInfo
+
+        device = DeviceInfo(
+            name=f"TR-VISION ({address})",
+            connection=ConnectionType.ADB,
+            address=address,
+        )
+        try:
+            ctx.device_service.select(device)
+            return
+        except Exception as e:
+            typer.echo(f"Connection failed: {e}")
+            raise typer.Exit(1) from None
+
+    # 2. Reconnect to last known device
+    if ctx.device_service.reconnect_last():
+        log.info("Reconnected to last device")
+        return
+
+    # 3. Auto-detect if exactly one device found
+    devices = ctx.device_service.detect()
+    if len(devices) == 1:
+        try:
+            ctx.device_service.select(devices[0])
+            log.info("Auto-connected to %s", devices[0].name)
+            return
+        except Exception:
+            pass
+
+    typer.echo("No device connected. Use --device/-d or 'trcc-vision connect' first.")
+    raise typer.Exit(1)
+
+
 def _setup_logging(verbose: bool, quiet: bool, log_file: str | None) -> None:
     """Configure logging based on CLI flags."""
     from pathlib import Path
@@ -190,31 +240,11 @@ def send_image(
 
     log.info("send-image command: %s", image_path)
     ctx = _get_ctx()
-    if ctx.display_service is None or ctx.device_service is None:
+    if ctx.display_service is None:
         typer.echo("Display service not available")
         raise typer.Exit(1)
+    _ensure_connected(address)
 
-    # Connect if not already connected
-    if not ctx.device_service.is_connected:
-        if address:
-            from trcc_vision.core.enums import ConnectionType
-            from trcc_vision.core.models import DeviceInfo
-
-            device = DeviceInfo(
-                name=f"TR-VISION ({address})",
-                connection=ConnectionType.ADB,
-                address=address,
-            )
-            try:
-                ctx.device_service.select(device)
-            except Exception as e:
-                typer.echo(f"Connection failed: {e}")
-                raise typer.Exit(1) from None
-        else:
-            typer.echo("No device connected. Use --device or 'trcc-vision connect' first.")
-            raise typer.Exit(1)
-
-    # Load and send image
     img_path = Path(image_path)
     if not img_path.is_file():
         typer.echo(f"File not found: {image_path}")
@@ -242,19 +272,10 @@ def set_brightness_cmd(
     """Set LCD brightness."""
     log.info("set-brightness command: %d", level)
     ctx = _get_ctx()
-    if ctx.display_service is None or ctx.device_service is None:
+    if ctx.display_service is None:
         typer.echo("Display service not available")
         raise typer.Exit(1)
-
-    if not ctx.device_service.is_connected and address:
-        from trcc_vision.core.enums import ConnectionType
-        from trcc_vision.core.models import DeviceInfo
-
-        device = DeviceInfo(
-            name=f"TR-VISION ({address})", connection=ConnectionType.ADB, address=address,
-        )
-        ctx.device_service.select(device)
-
+    _ensure_connected(address)
     ctx.display_service.set_brightness(level)
     typer.echo(f"Brightness set to {level}%")
 
@@ -262,12 +283,14 @@ def set_brightness_cmd(
 @app.command(name="screen")
 def screen_cmd(
     state: str = typer.Argument(..., help="'on' or 'off'"),
+    address: str | None = typer.Option(None, "--device", "-d", help="Device address"),
 ) -> None:
     """Turn LCD screen on or off."""
     ctx = _get_ctx()
     if ctx.display_service is None:
         typer.echo("Display service not available")
         raise typer.Exit(1)
+    _ensure_connected(address)
     on = state.lower() in ("on", "1", "true")
     ctx.display_service.screen_power(on)
     typer.echo(f"Screen turned {'on' if on else 'off'}")

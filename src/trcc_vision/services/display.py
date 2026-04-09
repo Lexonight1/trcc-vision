@@ -49,7 +49,9 @@ class DisplayService:
         if self._device.is_connected:
             msg = rotation_cmd(rotation.value)
             self._device.send_command(msg.serialize())
-        log.info("Rotation → %d°", rotation.value)
+            log.info("Rotation → %d°", rotation.value)
+        else:
+            log.warning("Rotation → %d° (not sent — device not connected)", rotation.value)
 
     def set_brightness(self, percent: int) -> None:
         """Set LCD brightness (0-100) and send command to device."""
@@ -59,16 +61,24 @@ class DisplayService:
         if self._device.is_connected:
             msg = brightness(self._state.brightness)
             self._device.send_command(msg.serialize())
-        log.info("Brightness → %d%%", self._state.brightness)
+            log.info("Brightness → %d%%", self._state.brightness)
+        else:
+            log.warning(
+                "Brightness → %d%% (not sent — device not connected)",
+                self._state.brightness,
+            )
 
     def screen_power(self, on: bool) -> None:
         """Turn LCD screen on or off."""
         from trcc_vision.protocols.commands import screen_power
 
+        label = "ON" if on else "OFF"
         if self._device.is_connected:
             msg = screen_power(on)
             self._device.send_command(msg.serialize())
-        log.info("Screen → %s", "ON" if on else "OFF")
+            log.info("Screen → %s", label)
+        else:
+            log.warning("Screen → %s (not sent — device not connected)", label)
 
     def send_image(self, img: Image.Image) -> None:
         """Resize, convert to RGB565, and send a PIL image to the LCD."""
@@ -109,6 +119,7 @@ class DisplayService:
         from trcc_vision.protocols.commands import sensor_data
 
         if not self._device.is_connected:
+            log.debug("Sensor push skipped — device not connected")
             return
 
         msg = sensor_data(
